@@ -32,13 +32,15 @@ decision, read back off Solana devnet.
 
 ## How a night is put together
 
-**Stories are a pool, not a cast.** `game/content.ts` holds a list of `Story`
-objects — one person, one problem, two or three ways to answer. A scheduler
-deals them onto *slots* (`game/world.ts`) a few at a time, so the corridor is
-never full at 02:00 and no two shifts play out in the same order. A slot knows
-its pose and how far to lift a sprite so a seated person lands on the bench
-instead of the floor; a story only spawns where its pose has somewhere to go.
-Adding thirty stories is thirty entries in one file and no code.
+**Six people, and the night is long.** There are five human sprite sets and
+five portraits, so there are five people plus a cat — one sprite is one person,
+and `CAST_NAMES` keys the name to the sprite so a story cannot invent a second
+identity for a portrait. Variety comes from time instead of headcount: 23 story
+entries across those six, dealt onto *slots* (`game/world.ts`) a few at a time,
+so the corridor is never full at 02:00 and no two shifts run in the same order.
+A slot knows its pose and how far to lift a sprite so a seated person lands on
+the bench instead of the floor, and a slot tied to a carryable follows it — move
+the chair and the next person sits where you put it.
 
 **The desk gives you work.** Radio calls from the head nurse are tasks, not
 flavour: mop two spills in corridor B, get a wet floor sign out before somebody
@@ -66,7 +68,9 @@ repeats it.
 
 **The night ends with a ledger.** After the mirror, before the handover, you get
 one line per person — and a follow-up overwrites the first account of them,
-because it is the one that turned out to be true.
+because it is the one that turned out to be true. Each of the three closing
+steps names its instruction in the HUD and puts a beacon over the thing to walk
+to, because at 06:00 nobody should have to guess the order.
 
 `npm run check:content` statically verifies the tables: every story has a slot
 it can appear in and an animation for its pose, every scene is reachable, and no
@@ -76,9 +80,9 @@ doorway drops you inside another doorway's trigger.
 
 | | What it does | Where |
 |---|---|---|
-| **Solana devnet** | The shift ledger. Each handover is one transaction: a `SystemProgram.transfer` for the coins and a Memo Program instruction carrying `{app, shift, leftCoins, msg}`. Reading the newest valid memo is how a new player learns what they inherited. No wallet install — a backend devnet operator key signs. | `lib/solana.ts`, `app/api/solana/shift/route.ts` |
-| **ElevenLabs** | The previous player's message, the head nurse's radio calls, and the mirror. Speech is streamed back and pushed through a 300–3400 Hz band-pass with soft clipping and carrier hiss, so the walkie-talkie sounds like a walkie-talkie. | `app/api/elevenlabs/tts/route.ts`, `game/audio.ts` |
-| **Google Gemini** | The mirror above the sink. It receives what you earned, what you spent on yourself, what you spent on other people, and a timestamped list of every choice, and answers in three sentences that do not moralise. | `app/api/gemini/verdict/route.ts` |
+| **Solana devnet** | The shift ledger, as a verifiable linked list. Each handover is one transaction: a `SystemProgram.transfer` for the coins and a Memo Program instruction carrying `{app, shift, leftCoins, msg, prev}`, where `prev` is the signature of the shift this player inherited. Ordering is therefore provable from the memos themselves rather than trusted from the RPC's result order, and a broken link reports `verified: false`. No wallet install and no API key — devnet's RPC is public; a backend operator keypair signs. | `lib/solana.ts`, `app/api/solana/{shift,chain}/route.ts` |
+| **ElevenLabs** | The previous player's message, the desk's radio calls, and the mirror — three different voices with three sets of voice settings. Speech is streamed and pushed through a 300–3400 Hz band-pass with soft clipping and carrier hiss, so the walkie-talkie sounds like a walkie-talkie. The radio registers are encoded at 22 kHz / 32 kbps *because* of that filter: inaudible after it, a quarter of the bytes. | `app/api/elevenlabs/tts/route.ts`, `game/audio.ts` |
+| **Google Gemini** | The mirror above the sink. It receives what you earned, what you spent on yourself, what you spent on other people, your mood, and a timestamped list of every choice and how each one turned out, and answers in three sentences that do not moralise — under a `responseSchema`, so the reply is JSON of a declared shape rather than prose to be parsed. | `app/api/gemini/verdict/route.ts` |
 
 Every integration degrades instead of breaking. No devnet key → an in-process
 ledger, clearly labelled as simulated. No ElevenLabs key → the game is silent
@@ -127,16 +131,17 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Without any keys in `.env.local` the game is fully playable — it just runs
-silent, with a local ledger and the fallback mirror.
-
-To put it on a real ledger:
+To put it on a real ledger — note there is no Solana API key to fetch, only a
+keypair to generate:
 
 ```bash
-solana-keygen new -o shift-key.json      # devnet only, never a mainnet key
-solana airdrop 2 --url devnet $(solana address -k shift-key.json)
-# paste the contents of shift-key.json into SOLANA_SECRET_KEY
+node tools/new-devnet-key.mjs        # mints the operator key, tries to fund it
+# paste SOLANA_SECRET_KEY into .env.local
+# if the public faucet is dry, fund the printed address at faucet.solana.com
 ```
+
+Without any keys in `.env.local` the game is fully playable — it just runs
+silent, with a local ledger and the fallback mirror.
 
 ## Controls
 
