@@ -11,7 +11,7 @@ stays on the shelf for whoever plays next.
 The starting money is not a game constant. It is the previous player's actual
 decision, read back off Solana devnet.
 
-![The corridor at 04:12 — the old man on the bench, the intern down on the floor with her charts](docs/screenshot.png)
+![The corridor at 04:12 — the old man on the bench, the intern down on the floor with her charts](docs/corridor.png)
 
 ---
 
