@@ -74,7 +74,9 @@ It's about seven minutes. Don't rush the locker at the end; that's the part the 
 
 ## Demo
 
-*(deployment link)*
+**Play it: https://the-next-shift-henna.vercel.app**
+
+No install, no wallet, no sign-in. About seven minutes.
 
 ## Code
 

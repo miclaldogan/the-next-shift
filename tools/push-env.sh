@@ -17,7 +17,12 @@ ENVIRONMENTS=(production preview development)
 
 pushed=0 skipped=0
 while IFS='=' read -r key value; do
-  case "$key" in ''|\#*) continue ;; esac
+  case "$key" in
+    ''|\#*) continue ;;
+    # the CLI writes its own OIDC token into .env.local on `vercel link`;
+    # it is issued per environment and must never be pushed back up
+    VERCEL_*|NX_*) printf '  %-28s skipped (managed by vercel)\n' "$key"; continue ;;
+  esac
   value=${value%$'\r'}
   if [ -z "$value" ]; then
     printf '  %-28s skipped (empty)\n' "$key"

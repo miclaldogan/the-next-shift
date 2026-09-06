@@ -1,5 +1,7 @@
 # The Next Shift
 
+**[Play it →](https://the-next-shift-henna.vercel.app)**
+
 A 16-bit narrative simulation about a hospital janitor working 02:00 → 06:00,
 and about the money the last player decided not to keep.
 
