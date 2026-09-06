@@ -126,7 +126,7 @@ def hud(im, clock, coins, fed, tired, mood, strip=None, strip_icon="▪"):
         text(im, strip, 24, y + 4, INK if strip_icon == "▸" else (200, 205, 190, 255))
 
 
-def speech(im, name, portrait, line, bottom=354):
+def speech(im, name, portrait, line, bottom=354, more=True):
     d = ImageDraw.Draw(im, "RGBA")
     y = bottom - 80
     panel(im, 6, y, W - 12, 80)
@@ -141,6 +141,8 @@ def speech(im, name, portrait, line, bottom=354):
         text(im, name, tx, ty, GOLD); ty += 15
     for l in wrap(line, W - tx - 22):
         text(im, l, tx, ty, INK); ty += 14
+    if more:
+        text(im, "▸", W - 24, y + 80 - 17, GOLD)
 
 
 def choices(im, header, options, selected=0):
@@ -237,19 +239,32 @@ def shot_corridor():
     save(im, "corridor")
 
 
-def shot_choice():
+def _bench_scene():
     im = bg("corridor")
     put(im, "corridor", "oldman.sit", 0, 388, 276, lift=16)
     put(im, "corridor", "mc.idle_mop", 0, 330, 322)
     im = grade(im, "corridor")
     hud(im, "02:41", 21, .62, .24, .48)
-    y = choices(im, "HE HASN'T ASKED YOU FOR ANYTHING.", [
+    return im
+
+
+def shot_dialogue():
+    """He speaks first, and the panel is his alone."""
+    im = _bench_scene()
+    speech(im, "the old man", "oldman",
+           "They filled the prescription an hour ago. Twelve coins. I have four.")
+    save(im, "dialogue")
+
+
+def shot_choice():
+    """Only once he has finished does the question arrive -- the game never
+    draws these two panels at the same time."""
+    im = _bench_scene()
+    choices(im, "HE HASN'T ASKED YOU FOR ANYTHING.", [
         ("Put eight coins in his hand. Don't explain.", "-8¢"),
         ("Tell the desk there's a man loitering.", "+3¢"),
         ("Nod. Keep mopping.", None),
     ])
-    speech(im, "the old man", "oldman",
-           "It's fine. The pharmacy opens at nine. I'll sit until nine.", bottom=y - 4)
     save(im, "choice")
 
 
@@ -322,6 +337,7 @@ def shot_title():
 if __name__ == "__main__":
     shot_title()
     shot_corridor()
+    shot_dialogue()
     shot_choice()
     shot_fire_escape()
     shot_street()

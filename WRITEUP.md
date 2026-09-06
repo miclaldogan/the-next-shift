@@ -27,7 +27,10 @@ _Neither of them has asked you for anything. That is the difficulty._
 
 There are six of them and no more, because there are six portraits and I refuse to give one face two names. An old man four coins short of a prescription. An intern who dropped a patient's charts at three in the morning and cannot pick them up. A man outside theatre 2 who has counted the corridor tiles nine times. A head nurse who needs twenty minutes off the floor and someone who didn't see her leave. A man on the fire landing with thirty coins and a request. A cat.
 
-![The old man, and three ways to answer him](docs/choice.png)
+![The old man says his piece — twelve coins for the prescription, and he has four](docs/dialogue.png)
+_He gets to finish. Nothing is asked of you while he is still talking._
+
+![Only then does the question arrive — three ways to answer him](docs/choice.png)
 _Eight coins is eight coins. So is three._
 
 Every answer costs something you were counting: coins, or minutes off a four-hour clock, or half the sandwich in your pocket. Nobody thanks you at the time.
@@ -75,7 +78,7 @@ It's about seven minutes. Don't rush the locker at the end; that's the part the 
 
 ## Code
 
-*(repository link)*
+https://github.com/miclaldogan/the-next-shift
 
 It runs with no keys at all — silent, on a local ledger, with a hand-written mirror. Every integration degrades instead of breaking, which is the only reason I could keep building at four in the morning when a faucet was dry and a rate limiter had opinions.
 
