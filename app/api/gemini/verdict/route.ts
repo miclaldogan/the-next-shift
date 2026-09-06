@@ -3,8 +3,20 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.0-flash";
-const TIMEOUT_MS = 7000;
+/**
+ * Aliases, deliberately. Pinned versions get retired for new keys -- a fresh AI
+ * Studio key could call neither gemini-2.0-flash nor gemini-2.5-flash, and the
+ * API only said so at request time.
+ *
+ * Two of them because the free tier answers 503 "this model is currently
+ * experiencing high demand" at random -- measured at roughly one failure in
+ * three. Retrying the same model against a capacity wall is optimistic, so the
+ * attempts rotate.
+ */
+const MODELS = [process.env.GEMINI_MODEL || "gemini-flash-latest", "gemini-flash-lite-latest"];
+const TIMEOUT_MS = 5000;
+const ATTEMPTS = 3;
+const BACKOFF_MS = [0, 500, 1200];
 
 const SYSTEM = `You are a cracked mirror above a sink in the staff room of a public hospital,
 at six in the morning. A night cleaner is looking into you. You have watched the whole shift.
@@ -38,9 +50,9 @@ const SCHEMA = {
   required: ["lines"],
 } as const;
 
-async function ask(key: string, facts: unknown, signal: AbortSignal) {
+async function ask(key: string, model: string, facts: unknown, signal: AbortSignal) {
   return fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
     {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -76,33 +88,40 @@ export async function POST(req: Request) {
   };
 
   // the mirror is the last beat of the game; it must never hang the ending, so
-  // one short attempt, one retry, then the caller's hand-written fallback
-  for (let attempt = 0; attempt < 2; attempt++) {
+  // short attempts across two models, then the caller's hand-written fallback
+  let lastStatus = 0;
+  for (let attempt = 0; attempt < ATTEMPTS; attempt++) {
+    if (BACKOFF_MS[attempt]) await new Promise((r) => setTimeout(r, BACKOFF_MS[attempt]));
+    const model = MODELS[attempt % MODELS.length];
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), TIMEOUT_MS);
     try {
-      const res = await ask(key, facts, ctl.signal);
+      const res = await ask(key, model, facts, ctl.signal);
       if (!res.ok) {
-        const detail = (await res.text()).slice(0, 200);
-        console.warn("[gemini]", res.status, detail);
-        if (res.status >= 500 && attempt === 0) continue;
-        return NextResponse.json({ error: "verdict failed", status: res.status }, { status: 502 });
+        lastStatus = res.status;
+        console.warn("[gemini]", model, res.status, (await res.text()).slice(0, 160));
+        continue;
       }
       const j = await res.json();
-      const text: string =
-        j?.candidates?.[0]?.content?.parts?.map((p: { text?: string }) => p.text ?? "").join("") ?? "";
+      // Flash is a thinking model: `parts` can carry reasoning alongside the
+      // answer, and concatenating all of them corrupts the JSON. Take only the
+      // parts that are actually the reply.
+      const parts: { text?: string; thought?: boolean }[] = j?.candidates?.[0]?.content?.parts ?? [];
+      const text = parts
+        .filter((p) => !p.thought && typeof p.text === "string")
+        .map((p) => p.text as string)
+        .join("");
       const parsed = JSON.parse(text) as { lines?: unknown };
       const lines = Array.isArray(parsed.lines)
         ? parsed.lines.map(String).map((l) => l.trim()).filter(Boolean).slice(0, 3)
         : [];
-      if (lines.length < 3) throw new Error("model returned fewer than three sentences");
-      return NextResponse.json({ lines, model: MODEL });
+      if (lines.length < 3) throw new Error("fewer than three sentences");
+      return NextResponse.json({ lines, model, attempts: attempt + 1 });
     } catch (e) {
-      console.warn("[gemini]", (e as Error).message);
-      if (attempt === 1) return NextResponse.json({ error: "verdict failed" }, { status: 502 });
+      console.warn("[gemini]", model, (e as Error).message);
     } finally {
       clearTimeout(timer);
     }
   }
-  return NextResponse.json({ error: "verdict failed" }, { status: 502 });
+  return NextResponse.json({ error: "verdict failed", status: lastStatus }, { status: 502 });
 }

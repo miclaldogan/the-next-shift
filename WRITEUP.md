@@ -116,10 +116,34 @@ generationConfig: {
 Now the reply is JSON of a declared shape or it is an error, and there is no
 regex. The regex was never a parsing bug — it was a *contract* bug.
 
-The rest is unglamorous and matters as much: a 7-second `AbortController`, one
-retry on 5xx, and a hand-written fallback monologue chosen from the same
-numbers. The mirror is the emotional payload of the ending; it is not allowed to
-hang it, and it is not allowed to be blank.
+The rest is unglamorous and mattered more than the schema did.
+
+Two things only show up against the live API. First, a key issued today can
+call neither `gemini-2.0-flash` nor `gemini-2.5-flash` — both are closed to new
+users, and you find out at request time, as a 404 carrying a sentence of prose.
+So the model is an alias, `gemini-flash-latest`, not a pin.
+
+Second, the free tier answers `503 "This model is currently experiencing high
+demand"` at random. I measured roughly one failure in three, arriving on
+requests with no pattern to them — I spent twenty minutes convinced my schema
+was malformed before I noticed a *plain* request failing the same way. Retrying
+the same model against a capacity wall is optimism, so the attempts rotate:
+
+```ts
+const MODELS = ["gemini-flash-latest", "gemini-flash-lite-latest"];
+const BACKOFF_MS = [0, 500, 1200];
+// attempt N uses MODELS[N % MODELS.length]
+```
+
+Three attempts, five seconds each, then a hand-written fallback monologue
+chosen from the same numbers. In practice it now lands on the second attempt,
+on the lite model. The mirror is the emotional payload of the ending; it is not
+allowed to hang it, and it is not allowed to be blank.
+
+One more, specific to thinking models: `candidates[0].content.parts` can carry
+reasoning next to the answer, and my first version concatenated every part's
+text. That produces invalid JSON from a model that is emitting perfectly valid
+JSON. Filter to the parts that are not thoughts.
 
 ---
 
