@@ -2,7 +2,7 @@ import {
   Connection, Keypair, PublicKey, SystemProgram,
   Transaction, TransactionInstruction, LAMPORTS_PER_SOL,
 } from "@solana/web3.js";
-import type { ShiftRecord } from "@/game/types";
+import type { ShiftChain, ShiftRecord } from "@/game/types";
 
 export const MEMO_PROGRAM_ID = new PublicKey("MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr");
 const RPC = process.env.SOLANA_RPC_URL || "https://api.devnet.solana.com";
@@ -43,31 +43,46 @@ export function connection() {
 }
 
 /**
- * The shift ledger is the account's own memo history: every player's handover
- * is one transaction, and the newest one that parses as ours is what the next
- * player inherits.
+ * The shift ledger is the account's own memo history: every handover is one
+ * transaction, and the newest one that parses as ours is what the next player
+ * inherits.
  */
-export async function readLatestShift(): Promise<ShiftRecord | null> {
+export async function readChain(limit = 6): Promise<ShiftChain | null> {
   const kp = operator();
   if (!kp) return null;
   const conn = connection();
-  const sigs = await conn.getSignaturesForAddress(kp.publicKey, { limit: 30 });
+  // over-fetch: the account also pays fees and receives airdrops, so most
+  // signatures on it are not handovers
+  const sigs = await conn.getSignaturesForAddress(kp.publicKey, { limit: limit * 8 });
+
+  const shifts: ShiftRecord[] = [];
   for (const s of sigs) {
     if (s.err) continue;
     const memo = s.memo?.replace(/^\[\d+\]\s*/, "");
     if (!memo) continue;
     try {
       const parsed = JSON.parse(memo);
-      if (parsed?.app === "the-next-shift") {
-        return {
-          ...parsed,
-          signature: s.signature,
-          explorer: `https://explorer.solana.com/tx/${s.signature}?cluster=devnet`,
-        } as ShiftRecord;
-      }
+      if (parsed?.app !== "the-next-shift") continue;
+      shifts.push({
+        ...parsed,
+        signature: s.signature,
+        explorer: `https://explorer.solana.com/tx/${s.signature}?cluster=devnet`,
+      } as ShiftRecord);
+      if (shifts.length >= limit) break;
     } catch { /* somebody else's memo */ }
   }
-  return null;
+
+  // walk the links: each record should name the one before it as its parent
+  let verified = true;
+  for (let i = 0; i < shifts.length - 1; i++) {
+    if (shifts[i].prev !== shifts[i + 1].signature) { verified = false; break; }
+  }
+  return { shifts, verified };
+}
+
+export async function readLatestShift(): Promise<ShiftRecord | null> {
+  const chain = await readChain(1);
+  return chain?.shifts[0] ?? null;
 }
 
 export async function writeShift(rec: Omit<ShiftRecord, "app">): Promise<ShiftRecord> {
@@ -88,7 +103,12 @@ export async function writeShift(rec: Omit<ShiftRecord, "app">): Promise<ShiftRe
   const memo = JSON.stringify({
     app: payload.app, shift: payload.shift,
     leftCoins: payload.leftCoins, msg: payload.msg,
+    prev: payload.prev ?? null,
   });
+  // Memo instruction data is capped; 566 bytes is the practical single-signer
+  // limit and we are far under it, but fail loudly rather than silently
+  // truncating somebody's last words.
+  if (Buffer.byteLength(memo, "utf8") > 560) throw new Error("memo too long");
 
   const tx = new Transaction().add(
     // symbolic: the coins move, one lamport per coin, so the handover shows up

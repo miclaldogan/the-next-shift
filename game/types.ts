@@ -106,6 +106,11 @@ export interface GameState {
   inheritedCoins: number;
   inheritedMessage: string;
   inheritedShift: number;
+  /** signature of the shift we inherited, stamped into ours as `prev` */
+  inheritedSignature: string;
+  /** the handovers before this one, newest first, for the title screen */
+  chain: ShiftRecord[];
+  chainVerified: boolean;
   toasts: { text: string; life: number; tone: "good" | "bad" | "info" }[];
 }
 
@@ -114,7 +119,22 @@ export interface ShiftRecord {
   shift: number;
   leftCoins: number;
   msg: string;
+  /**
+   * Signature of the shift this player inherited. It turns a pile of
+   * independent memos into a linked list: each record names its parent, so the
+   * order is provable from the data rather than trusted from the RPC, and a
+   * gap or a fork is detectable.
+   */
+  prev?: string;
   signature?: string;
   explorer?: string;
+  simulated?: boolean;
+}
+
+export interface ShiftChain {
+  /** newest first */
+  shifts: ShiftRecord[];
+  /** every record's `prev` matches the signature of the one before it */
+  verified: boolean;
   simulated?: boolean;
 }

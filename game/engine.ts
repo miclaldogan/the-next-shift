@@ -1,7 +1,7 @@
 import {
   GAME_W, GAME_H, SHIFT_SECONDS, SHIFT_START_MIN, SHIFT_END_MIN,
   type GameState, type SceneId, type Spill, type ShiftRecord,
-  type ActiveStory, type ActiveTask, type CarriableId,
+  type ActiveStory, type ActiveTask, type CarriableId, type ShiftChain,
 } from "./types";
 import { loadAssets, anim, frameAt, frameOnce, type Assets } from "./assets";
 import { BitmapFont } from "./font";
@@ -14,10 +14,10 @@ import {
 } from "./world";
 import {
   STORIES, CAST_POSES, CAST_PORTRAITS, CAST_NAMES, TASKS, RADIO_FLAVOUR, VENDING, MOOD_MARKS,
-  INTRO, UI, localVerdict, type Story, type Choice, type VendingItem,
+  INTRO, UI, END_STEPS, localVerdict, type Story, type Choice, type VendingItem,
 } from "./content";
 import {
-  drawHUD, drawPrompt, drawSpeech, drawChoices, drawNarration, drawTitle, drawLedger,
+  drawHUD, drawPrompt, drawSpeech, drawChoices, drawNarration, drawTitle, drawLedger, drawBeacon,
   choiceAt, clockText, type Option,
 } from "./hud";
 
@@ -125,19 +125,29 @@ export class Game {
   }
 
   private async loadShift() {
+    const s = this.state;
     try {
       const res = await fetch("/api/solana/shift");
       const j = (await res.json()) as ShiftRecord & { error?: string };
       if (!j.error) {
-        this.state.inheritedCoins = j.leftCoins ?? 12;
-        this.state.inheritedMessage = j.msg ?? "";
-        this.state.inheritedShift = j.shift ?? 1;
-        this.state.coins = this.state.inheritedCoins;
-        if (j.simulated) this.hooks.onStatus?.("devnet unreachable — running on a local ledger");
+        s.inheritedCoins = j.leftCoins ?? 12;
+        s.inheritedMessage = j.msg ?? "";
+        s.inheritedShift = j.shift ?? 1;
+        s.inheritedSignature = j.signature ?? "";
+        s.coins = s.inheritedCoins;
+        if (j.simulated) this.hooks.onStatus?.("devnet not configured — running on a local ledger");
+        // the voice takes a second to come back; ask for it before it is needed
+        if (s.inheritedMessage) void this.speak(s.inheritedMessage, "previous", true);
       }
     } catch {
       this.hooks.onStatus?.("devnet unreachable — running on a local ledger");
     }
+
+    try {
+      const chain = (await fetch("/api/solana/chain").then((r) => r.json())) as ShiftChain;
+      s.chain = chain.shifts ?? [];
+      s.chainVerified = chain.verified ?? false;
+    } catch { /* the title screen simply shows nothing */ }
   }
 
   // ------------------------------------------------------------- loop ----
@@ -769,7 +779,7 @@ export class Game {
     this.hooks.onPhase?.(s.phase);
     s.spills = [];
     if (s.carrying) this.setDown();   // don't let the trolley vanish at 06:00
-    this.goTo("locker_room", 300, 330);
+    this.goTo("locker_room", 214, 332);   // a few steps from locker 14, not across the room
     audio.walkie();
     window.setTimeout(() => {
       this.narrate([
@@ -846,12 +856,17 @@ export class Game {
       const res = await fetch("/api/solana/shift", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ leftCoins, msg, shift: s.inheritedShift + 1 }),
+        body: JSON.stringify({
+          leftCoins, msg,
+          shift: s.inheritedShift + 1,
+          prev: s.inheritedSignature || undefined,
+        }),
       });
       this.finalRecord = await res.json();
     } catch {
       this.finalRecord = {
-        app: "the-next-shift", shift: s.inheritedShift + 1, leftCoins, msg, simulated: true,
+        app: "the-next-shift", shift: s.inheritedShift + 1, leftCoins, msg,
+        prev: s.inheritedSignature || undefined, simulated: true,
       };
     }
     s.coins -= leftCoins;
@@ -879,10 +894,11 @@ export class Game {
       this.hooks.onPhase?.("play");
       this.trySpawnStory("corridor");   // don't start the night in an empty corridor
     });
-    if (s.inheritedMessage) this.speak(s.inheritedMessage, "previous");
+    if (s.inheritedMessage) void this.speak(s.inheritedMessage, "previous");
   }
 
-  private async speak(text: string, voice: string) {
+  /** `warmOnly` fetches and caches the clip server-side without playing it. */
+  private async speak(text: string, voice: string, warmOnly = false) {
     try {
       const res = await fetch("/api/elevenlabs/tts", {
         method: "POST",
@@ -891,6 +907,7 @@ export class Game {
       });
       if (!res.ok) return;
       const buf = await res.arrayBuffer();
+      if (warmOnly) return;
       if (buf.byteLength > 512) await audio.speak(buf, voice !== "mirror");
     } catch { /* silence is in character */ }
   }
@@ -899,7 +916,7 @@ export class Game {
   private draw(dt: number) {
     const s = this.state;
     if (s.phase === "boot") {
-      drawTitle(this.r, this.titleT, this.ready, s.inheritedCoins, s.inheritedShift);
+      drawTitle(this.r, this.titleT, this.ready, s);
       return;
     }
 
@@ -964,6 +981,12 @@ export class Game {
     this.r.grade(this.time, sc.ambience === "room" ? 1 : 0, s.mood);
 
     if (s.phase !== "intro" && s.phase !== "done") drawHUD(this.r, s);
+
+    const step = END_STEPS[s.phase];
+    if (step && !this.dlg && !this.menu && !this.ledgerOpen) {
+      const h = sc.hotspots.find((x) => x.id === step.hotspotId);
+      if (h) drawBeacon(this.r, h.x + h.w / 2, h.y - 8);
+    }
 
     if (!this.dlg && !this.menu && !this.cutscene) {
       if (this.target)
@@ -1111,6 +1134,9 @@ export function freshState(): GameState {
     inheritedCoins: 12,
     inheritedMessage: "",
     inheritedShift: 1,
+    inheritedSignature: "",
+    chain: [],
+    chainVerified: false,
     toasts: [],
   };
 }

@@ -1,23 +1,9 @@
 import { NextResponse } from "next/server";
 import { readLatestShift, writeShift } from "@/lib/solana";
-import type { ShiftRecord } from "@/game/types";
+import { localAppend, localLatest } from "./ledger";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
-
-/**
- * When devnet is not configured the game still has to be playable, so an
- * in-process ledger stands in. It is marked `simulated` so the UI can say so
- * rather than quietly pretending it wrote to a chain.
- */
-const SEED: ShiftRecord = {
-  app: "the-next-shift",
-  shift: 1,
-  leftCoins: 12,
-  msg: "Machine eats coins on the second try. The old man on the bench is not lying.",
-  simulated: true,
-};
-let localLedger: ShiftRecord = SEED;
 
 export async function GET() {
   try {
@@ -26,7 +12,7 @@ export async function GET() {
   } catch (e) {
     console.warn("[solana] read failed:", (e as Error).message);
   }
-  return NextResponse.json(localLedger);
+  return NextResponse.json(localLatest());
 }
 
 export async function POST(req: Request) {
@@ -34,14 +20,15 @@ export async function POST(req: Request) {
   const leftCoins = Math.max(0, Math.min(9999, Math.round(Number(body.leftCoins) || 0)));
   const msg = String(body.msg ?? "").slice(0, 140);
   const shift = Math.max(1, Math.round(Number(body.shift) || 1));
+  // the client hands back the signature it inherited, which becomes this
+  // record's parent link
+  const prev = typeof body.prev === "string" && body.prev ? body.prev.slice(0, 128) : undefined;
 
   try {
-    const rec = await writeShift({ shift, leftCoins, msg });
-    localLedger = rec;
+    const rec = await writeShift({ shift, leftCoins, msg, prev });
     return NextResponse.json(rec);
   } catch (e) {
     console.warn("[solana] write failed:", (e as Error).message);
-    localLedger = { app: "the-next-shift", shift, leftCoins, msg, simulated: true };
-    return NextResponse.json(localLedger);
+    return NextResponse.json(localAppend({ shift, leftCoins, msg, prev }));
   }
 }

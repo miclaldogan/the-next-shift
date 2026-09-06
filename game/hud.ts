@@ -1,6 +1,6 @@
-import { GAME_W, GAME_H, SHIFT_END_MIN, type GameState, type ActiveTask } from "./types";
+import { GAME_W, GAME_H, SHIFT_END_MIN, type GameState } from "./types";
 import { Renderer, PAL } from "./render";
-import { UI } from "./content";
+import { UI, END_STEPS } from "./content";
 
 export function clockText(minute: number) {
   const h = Math.floor(minute / 60) % 24;
@@ -37,8 +37,17 @@ export function drawHUD(r: Renderer, s: GameState) {
   });
 
   let y = top + h + 4;
+  // after 06:00 the mop tasks are over; the strip carries the one remaining
+  // instruction instead, because nothing else tells the player what to do
+  const endStep = END_STEPS[s.phase];
   const task = s.tasks.find((t) => !t.complete);
-  if (task) {
+  if (endStep) {
+    const w = font.width(endStep.text) + 24;
+    r.panel(6, y, w, 16);
+    font.draw(ctx, "▸", 13, y + 4, PAL.gold);
+    font.draw(ctx, endStep.text, 24, y + 4, PAL.ink);
+    y += 20;
+  } else if (task) {
     const label = task.need > 1 ? `${task.brief}  ${task.done}/${task.need}` : task.brief;
     const w = font.width(label) + 24;
     r.panel(6, y, w, 16);
@@ -111,6 +120,35 @@ export function drawPrompt(r: Renderer, x: number, y: number, label: string) {
   r.panel(bx, by, w, 15);
   font.draw(ctx, "E", bx + 5, by + 3, PAL.gold);
   font.draw(ctx, label, bx + 16, by + 3, PAL.ink);
+}
+
+/** A pulse over the one thing worth walking to. */
+export function drawBeacon(r: Renderer, x: number, y: number) {
+  const { ctx } = r;
+  const t = performance.now() / 620;
+  const pulse = 0.5 + 0.5 * Math.sin(t * Math.PI * 2);
+  const cx = Math.round(x);
+  const cy = Math.round(y - pulse * 3);
+
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+  const g = ctx.createRadialGradient(cx, cy + 6, 0, cx, cy + 6, 26);
+  g.addColorStop(0, `rgba(232,196,106,${0.20 + 0.10 * pulse})`);
+  g.addColorStop(1, "rgba(232,196,106,0)");
+  ctx.fillStyle = g;
+  ctx.fillRect(cx - 26, cy - 20, 52, 52);
+  ctx.restore();
+
+  ctx.save();
+  ctx.globalAlpha = 0.65 + 0.35 * pulse;
+  ctx.fillStyle = PAL.gold;
+  ctx.beginPath();                 // a chevron pointing down at the thing
+  ctx.moveTo(cx - 5, cy - 5);
+  ctx.lineTo(cx + 5, cy - 5);
+  ctx.lineTo(cx, cy + 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }
 
 /* ---------------------------------------------------------------- speech -- */
@@ -226,7 +264,7 @@ export function drawNarration(r: Renderer, text: string, visible: number, more: 
     font.draw(ctx, "▸", 530, y + h - 16, PAL.gold);
 }
 
-export function drawTitle(r: Renderer, t: number, ready: boolean, inherited: number, shift: number) {
+export function drawTitle(r: Renderer, t: number, ready: boolean, s: GameState) {
   const { ctx, font } = r;
   ctx.fillStyle = "#05070a";
   ctx.fillRect(0, 0, GAME_W, GAME_H);
@@ -237,22 +275,42 @@ export function drawTitle(r: Renderer, t: number, ready: boolean, inherited: num
   ctx.save();
   for (let i = 0; i < 3; i++) {
     ctx.globalAlpha = 0.12;
-    font.draw(ctx, title, (GAME_W - w) / 2 + (i - 1) * 2 + jitter, 122, i === 0 ? "#4aa0c0" : "#c05a4a");
+    font.draw(ctx, title, (GAME_W - w) / 2 + (i - 1) * 2 + jitter, 74, i === 0 ? "#4aa0c0" : "#c05a4a");
   }
   ctx.globalAlpha = 1;
-  font.draw(ctx, title, (GAME_W - w) / 2 + jitter, 122, "#e9e5d6");
+  font.draw(ctx, title, (GAME_W - w) / 2 + jitter, 74, "#e9e5d6");
   ctx.restore();
 
   const sub = UI.subtitle;
-  font.draw(ctx, sub, (GAME_W - font.width(sub)) / 2, 142, PAL.dim);
+  font.draw(ctx, sub, (GAME_W - font.width(sub)) / 2, 94, PAL.dim);
 
-  if (shift > 0) {
-    const l = `shift #${shift} · ${inherited} coins were left for you`;
-    font.draw(ctx, l, (GAME_W - font.width(l)) / 2, 196, PAL.gold);
+  if (s.inheritedShift > 0) {
+    const l = `shift #${s.inheritedShift} · ${s.inheritedCoins} coins were left for you`;
+    font.draw(ctx, l, (GAME_W - font.width(l)) / 2, 128, PAL.gold);
   }
+
+  // the handovers this one hangs off, read back off the chain
+  if (s.chain.length) {
+    const head = s.chainVerified ? UI.chainTitle : `${UI.chainTitle} · ${UI.chainBroken}`;
+    font.draw(ctx, head, 106, 158, s.chainVerified ? "#5d6a5d" : PAL.blood);
+    ctx.fillStyle = PAL.panelEdge;
+    ctx.fillRect(106, 172, GAME_W - 212, 1);
+    let y = 180;
+    for (const rec of s.chain.slice(0, 4)) {
+      font.draw(ctx, `#${rec.shift}`, 106, y, PAL.dim);
+      const left = `left ${rec.leftCoins}`;
+      font.draw(ctx, left, 140, y, rec.leftCoins > 0 ? PAL.gold : "#5c655c");
+      const room = GAME_W - 212 - 92;
+      let quote = rec.msg ? `"${rec.msg}"` : "—";
+      while (font.width(quote) > room && quote.length > 4) quote = `${quote.slice(0, -5)}…"`;
+      font.draw(ctx, quote, 198, y, "#7d8a7d");
+      y += 13;
+    }
+  }
+
   const msg = ready ? UI.press : UI.loading;
   if (!ready || Math.sin(t * 4) > -0.3)
-    font.draw(ctx, msg, (GAME_W - font.width(msg)) / 2, 232, ready ? PAL.ink : PAL.dim);
+    font.draw(ctx, msg, (GAME_W - font.width(msg)) / 2, 266, ready ? PAL.ink : PAL.dim);
 
   font.draw(ctx, UI.hint, (GAME_W - font.width(UI.hint)) / 2, 330, "#4d5850");
   r.grade(t);
