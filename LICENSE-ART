@@ -1,0 +1,35 @@
+Artwork licence
+===============
+
+Copyright (c) 2026 miclaldogan
+
+The visual assets in this repository are licensed under the
+Creative Commons Attribution-NonCommercial 4.0 International licence
+(CC BY-NC 4.0).
+
+    Deed:      https://creativecommons.org/licenses/by-nc/4.0/
+    Full text: https://creativecommons.org/licenses/by-nc/4.0/legalcode
+
+What this covers
+----------------
+
+    background/      the four painted scenes
+    characters/      the 1:1 dialogue portraits
+    sheet/           the character sprite sheets
+    cat.png
+    furniture.png
+    public/assets/   everything generated from the files above -- the sprite
+                     atlas, the scene backgrounds and the portraits
+
+In short
+--------
+
+You may share and adapt these images, including in a modified form, as long
+as you credit the author and do NOT use them commercially.
+
+Everything else in this repository -- the game engine, the asset pipeline, the
+API routes, the tools -- is MIT licensed. See LICENSE.
+
+The baked bitmap font in `public/assets/font.png` is rendered from DejaVu Sans
+Bold, which is distributed under its own permissive licence:
+https://dejavu-fonts.github.io/License.html

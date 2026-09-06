@@ -4,12 +4,14 @@ A 16-bit narrative simulation about a hospital janitor working 02:00 → 06:00,
 and about the money the last player decided not to keep.
 
 You start the shift with coins you did not earn. You mop, you get paid a few
-coins at a time, and you meet five people who need something. At 06:00 you open
+coins at a time, and you meet five people and a cat who need something. At 06:00 you open
 locker 14, take off the overalls, and decide how much of what you have left
 stays on the shelf for whoever plays next.
 
 The starting money is not a game constant. It is the previous player's actual
 decision, read back off Solana devnet.
+
+![The corridor at 04:12 — the old man on the bench, the intern down on the floor with her charts](docs/screenshot.png)
 
 ---
 
@@ -167,3 +169,15 @@ public/assets/ generated -- atlas, manifest, backgrounds, portraits, font
 ```
 
 Built for the DEV Weekend Challenge: Generosity Edition.
+
+## Licence
+
+The **code** is MIT — the engine, the asset pipeline, the API routes, the tools.
+Take any of it.
+
+The **artwork** is CC BY-NC 4.0: share and adapt it with credit, but not
+commercially. That is the `background/`, `characters/` and `sheet/` folders,
+`cat.png`, `furniture.png`, and everything generated from them under
+`public/assets/`.
+
+See [LICENSE](LICENSE) and [LICENSE-ART](LICENSE-ART).
