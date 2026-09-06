@@ -120,6 +120,12 @@ export default function GameShell() {
                   devnet was not configured, so this was recorded on a local ledger.
                 </p>
               )}
+              <p className="fineprint">
+                Devnet. The coins are test tokens with no value, this game never
+                asks you to connect a wallet, and nothing you do here can move
+                real money. If you want to give something away tonight, give it
+                to someone who needs it — not to this address.
+              </p>
               <button onClick={() => location.reload()}>TAKE THE NEXT SHIFT</button>
             </div>
           </div>

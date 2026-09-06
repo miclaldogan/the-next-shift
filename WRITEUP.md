@@ -134,6 +134,13 @@ Ten pixels on a 132-pixel sprite. Nobody had reported the player sliding around,
 
 **The live API is a different API.** A Gemini key issued today can call neither `gemini-2.0-flash` nor `gemini-2.5-flash` — both are closed to new users, and it tells you at request time, as a 404 with a sentence of prose inside it. So the model is an alias, not a pin. Then the free tier started answering `503 "This model is currently experiencing high demand"` on roughly one request in three, at random — I spent twenty minutes certain my schema was malformed before I noticed a *plain* request failing the same way. Retrying the same model against a capacity wall is optimism, so three attempts rotate across two models with backoff. It lands on the second one now. And Flash is a thinking model: `parts` can carry reasoning beside the answer, and concatenating all of them produces invalid JSON from a model emitting perfectly valid JSON.
 
+And the disclaimer this game specifically needs: it is **devnet**. The coins
+are test tokens worth nothing, nobody connects a wallet, and no player action
+can move real money — a backend operator keypair signs the handovers. The
+operator address shows up in the explorer links, so the ending says it plainly:
+if the game works on you, give something to someone who needs it, not to that
+address.
+
 One more, for anyone about to reach for a Solana tutorial: **there is no API key.** Devnet's RPC is public and keyless. What you need is a signing key, which nobody issues to you — `Keypair.generate()` is the whole ceremony. The one thing worth paying attention to is that the public faucet is rate limited and frequently dry, which it told me in production terms about eight times in a row, so a provider endpoint in `SOLANA_RPC_URL` is the difference between a demo that works when four judges open it at once and one that doesn't.
 
 ---

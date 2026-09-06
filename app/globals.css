@@ -141,6 +141,14 @@ button:disabled { opacity: 0.5; cursor: wait; }
 .card a { color: var(--gold); }
 .card.done { text-align: left; }
 .warn { color: #b98a5a; margin: 0; font-size: 12px; }
+.fineprint {
+  margin: 4px 0 0;
+  color: #5f6a60;
+  font-size: 11px;
+  line-height: 1.6;
+  border-top: 1px solid var(--edge);
+  padding-top: 10px;
+}
 
 .bar {
   width: min(100%, calc(100vh * 16 / 9 - 60px));

@@ -135,7 +135,11 @@ export class Game {
         s.inheritedShift = j.shift ?? 1;
         s.inheritedSignature = j.signature ?? "";
         s.coins = s.inheritedCoins;
-        if (j.simulated) this.hooks.onStatus?.("devnet not configured — running on a local ledger");
+        this.hooks.onStatus?.(
+          j.simulated
+            ? "devnet not configured — running on a local ledger · no wallet, no real funds"
+            : "solana devnet · test tokens, no wallet, no real funds",
+        );
         // the voice takes a second to come back; ask for it before it is needed
         if (s.inheritedMessage) void this.speak(s.inheritedMessage, "previous", true);
       }

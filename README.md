@@ -170,6 +170,16 @@ public/assets/ generated -- atlas, manifest, backgrounds, portraits, font
 
 Built for the DEV Weekend Challenge: Generosity Edition.
 
+## A note on the coins
+
+This runs on Solana **devnet**. The coins are test tokens with no value, the
+game never asks anyone to connect a wallet, and nothing a player does can move
+real money — a backend operator keypair signs every handover.
+
+The operator address is visible in the explorer links. Please do not send
+anything real to it. The game is about giving something away; if it works on
+you, give it to someone who needs it.
+
 ## Licence
 
 The **code** is MIT — the engine, the asset pipeline, the API routes, the tools.
