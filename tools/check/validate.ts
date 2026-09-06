@@ -2,7 +2,9 @@
  * Static sanity pass over the content tables. A story whose pose has no slot in
  * its scene can never appear, and nothing at runtime would tell you.
  */
-import { STORIES, CAST_POSES, CAST_PORTRAITS, TASKS, VENDING, MOOD_MARKS } from "../../game/content";
+import {
+  STORIES, CAST_POSES, CAST_PORTRAITS, CAST_NAMES, TASKS, VENDING, MOOD_MARKS, END_STEPS,
+} from "../../game/content";
 import { SCENES, CARRIABLES } from "../../game/world";
 
 const problems: string[] = [];
@@ -27,8 +29,8 @@ for (const st of STORIES) {
   if (!st.choices.length) problems.push(`${st.id}: no choices`);
   for (const c of st.choices)
     if (!c.reply.length) problems.push(`${st.id}: a choice has no reply`);
-  if (st.cast !== "cat" && !CAST_PORTRAITS[st.cast])
-    problems.push(`${st.id}: cast "${st.cast}" has no portrait`);
+  if (!CAST_NAMES[st.cast])
+    problems.push(`${st.id}: cast "${st.cast}" has no name`);
 
   if (st.needsFlag && !producible.has(st.needsFlag))
     problems.push(`${st.id}: waits on flag "${st.needsFlag}" that no choice ever sets`);
@@ -43,6 +45,31 @@ for (const st of STORIES) {
   const poseSlots = scene.slots.filter((sl) => sl.pose === st.pose);
   if (poseSlots.length && poseSlots.every((sl) => sl.needsProp))
     problems.push(`${st.id}: its only "${st.pose}" slot needs the ${poseSlots[0].needsProp}, which the player can carry off`);
+}
+
+// one sprite is one person. Names come from CAST_NAMES so a story cannot invent
+// a second identity for a portrait, but check the table itself stays honest.
+const portraitless = (Object.keys(CAST_NAMES) as (keyof typeof CAST_NAMES)[])
+  .filter((c) => !CAST_PORTRAITS[c]);
+if (portraitless.length !== 1 || portraitless[0] !== "cat")
+  problems.push(`every cast but the cat needs a portrait; missing: ${portraitless.join(", ")}`);
+for (const [cast, name] of Object.entries(CAST_NAMES))
+  if (!name.trim()) problems.push(`cast "${cast}" has an empty name`);
+const named = new Set(Object.values(CAST_NAMES));
+if (named.size !== Object.keys(CAST_NAMES).length)
+  problems.push("two casts share a name -- the player will read them as one person");
+
+// every person should have somewhere for the night to go after the first meeting
+for (const cast of Object.keys(CAST_NAMES)) {
+  const mine = STORIES.filter((s) => s.cast === cast);
+  if (!mine.length) { problems.push(`cast "${cast}" has no stories at all`); continue; }
+  if (!mine.some((s) => s.needsFlag))
+    problems.push(`cast "${cast}" never comes back -- no follow-up hangs off their choices`);
+}
+
+for (const [phase, step] of Object.entries(END_STEPS)) {
+  const known = Object.values(SCENES).some((sc) => sc.hotspots.some((h) => h.id === step.hotspotId));
+  if (!known) problems.push(`end step "${phase}" points at unknown hotspot "${step.hotspotId}"`);
 }
 
 // follow-ups should exist for the branches worth following up
@@ -114,7 +141,11 @@ for (const [id, sc] of Object.entries(SCENES)) {
 
 const perScene: Record<string, number> = {};
 for (const st of STORIES) perScene[st.scene] = (perScene[st.scene] ?? 0) + 1;
-ok.push(`${STORIES.length} stories: ${Object.entries(perScene).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+ok.push(`${STORIES.length} stories across ${Object.keys(CAST_NAMES).length} people: ${Object.entries(perScene).map(([k, v]) => `${k} ${v}`).join(", ")}`);
+for (const cast of Object.keys(CAST_NAMES)) {
+  const mine = STORIES.filter((s) => s.cast === cast);
+  ok.push(`  ${CAST_NAMES[cast as keyof typeof CAST_NAMES]}: ${mine.length} (1 first meeting, ${mine.length - 1} callbacks)`);
+}
 ok.push(`${TASKS.length} radio tasks, ${VENDING.length} vending items, ${MOOD_MARKS.length} mood beats`);
 ok.push(`${followUps.length} of them are follow-ups gated on an earlier choice`);
 const moodless = STORIES.filter((s) => s.choices.every((c) => c.mood === undefined));

@@ -13,7 +13,7 @@ import {
   type SceneDef, type Slot, type Hotspot, type Exit,
 } from "./world";
 import {
-  STORIES, CAST_POSES, CAST_PORTRAITS, TASKS, RADIO_FLAVOUR, VENDING, MOOD_MARKS,
+  STORIES, CAST_POSES, CAST_PORTRAITS, CAST_NAMES, TASKS, RADIO_FLAVOUR, VENDING, MOOD_MARKS,
   INTRO, UI, localVerdict, type Story, type Choice, type VendingItem,
 } from "./content";
 import {
@@ -299,6 +299,11 @@ export class Game {
       const live = s.stories.filter((a) => a.scene === id && a.resolvedAt === undefined);
       if (live.length >= (id === "corridor" ? 2 : 1)) continue;
 
+      // one sprite is one person: they cannot be on two benches at once, in
+      // this scene or any other
+      const busy = new Set(
+        s.stories.map((a) => STORY_BY_ID[a.storyId]?.cast).filter(Boolean) as string[],
+      );
       const taken = new Set(s.stories.filter((a) => a.scene === id).map((a) => a.slotId));
       const free = scene.slots.filter((sl) => !taken.has(sl.id) && this.slotPos(id, sl));
       const flagReady = (st: Story) => {
@@ -309,6 +314,7 @@ export class Game {
       const pool = STORIES.filter(
         (st) =>
           st.scene === id &&
+          !busy.has(st.cast) &&
           !s.usedStories.includes(st.id) &&
           (st.fromMinute ?? 0) <= s.minute &&
           flagReady(st) &&
@@ -473,7 +479,7 @@ export class Game {
         if (!st || !pos) continue;
         consider({
           kind: "story", active: a, x: pos.x, y: pos.y,
-          label: a.resolvedAt === undefined ? st.name : "talk",
+          label: a.resolvedAt === undefined ? CAST_NAMES[st.cast] : "talk",
         });
       }
       for (const pr of s.props) {
@@ -639,10 +645,12 @@ export class Game {
     if (!st) return;
     const done = active.resolvedAt !== undefined;
     if (!done && st.mood) this.adjustMood(st.mood);
+    const portrait = CAST_PORTRAITS[st.cast] ?? null;
     this.dlg = {
-      kind: "speech",
-      name: st.name,
-      portrait: CAST_PORTRAITS[st.cast] ?? null,
+      // the cat has no portrait and no voice, so it is narrated about
+      kind: portrait ? "speech" : "narration",
+      name: CAST_NAMES[st.cast],
+      portrait,
       lines: done ? st.resolved : st.lines,
       idx: 0,
       chars: 0,
@@ -679,9 +687,10 @@ export class Game {
     // the ledger keeps one line per person: a follow-up overwrites the first
     // account of them, because it is the one that turned out to be true
     const line = c.outcome ?? c.note;
-    const seen = s.ledger.findIndex((e) => e.person === st.name);
-    if (seen >= 0) s.ledger[seen] = { person: st.name, line };
-    else s.ledger.push({ person: st.name, line });
+    const person = CAST_NAMES[st.cast];
+    const seen = s.ledger.findIndex((e) => e.person === person);
+    if (seen >= 0) s.ledger[seen] = { person, line };
+    else s.ledger.push({ person, line });
 
     s.decisions.push({
       npcId: st.id,
@@ -694,10 +703,11 @@ export class Game {
 
     active.resolvedAt = s.minute;
 
+    const replyPortrait = CAST_PORTRAITS[st.cast] ?? null;
     this.dlg = {
-      kind: "speech",
-      name: st.name,
-      portrait: CAST_PORTRAITS[st.cast] ?? null,
+      kind: replyPortrait ? "speech" : "narration",
+      name: CAST_NAMES[st.cast],
+      portrait: replyPortrait,
       lines: c.reply,
       idx: 0,
       chars: 0,
